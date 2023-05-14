@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!-- https://kodi.wiki/view/Add-on_settings -->
+<settings>
+    <category label="32010">
+        <setting label="32011" type="select" id="codec" lvalues="32021|32022"/>
+        <setting label="32012" type="select" id="quality" lvalues="32023|32024|32025"/>
+
+        <setting label="32013" type="folder" id="folder" source="music" option="writeable"/>
+        <setting label="32014" type="bool" id="auto_download" default="false"/>
+        <setting label="32015" type="bool" id="big_fanart" default="false"/>
+    </category>
+
+    <category label="32030">
+        <setting label="32031" id="token" type="text" default=""/>
+    </category>
+
+</settings>
