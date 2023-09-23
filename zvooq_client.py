@@ -77,14 +77,19 @@ class ZvooqkClient:
         res = self.Service.Search(searchString)
         return res
 
-    # жанры и настроения
-    def genres_moods(self):
-        res = self.Service.getGenresMoodsPlaylists()
-        return res
-    
     # плейлисты на 1й странице
     def main_playlists(self):
         res = self.Service.getMainPlaylists()
+        return res
+
+    # жанры и настроения
+    def genres_moods(self):
+        res = self.Service.getGenresMoods()
+        return res
+
+    # треки для жанра
+    def genre_tracks(self, genre):
+        res = self.Service.getGenreTracks(genre)
         return res
 
 

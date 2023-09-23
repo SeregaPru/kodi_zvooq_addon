@@ -358,16 +358,26 @@ def build_item_playlist(path, playlist, titleFormat="%s"):
 
 
 #-------- Жанры и настроения ---------
-
-@plugin.route('/Genres')
-def build_main_genres_moods():
-    genres_playlists = client.genres_moods()
-    AddItems('playlists', [build_item_playlist("/Playlists", playlist, "%s") for playlist in genres_playlists] )
-    
+   
 @plugin.route('/Playlists')
 def build_main_playlists():
     genres_playlists = client.main_playlists()
     AddItems('playlists', [build_item_playlist("/Playlists", playlist, "%s") for playlist in genres_playlists] )
+
+@plugin.route('/Genres')
+def build_main_genres_moods():
+    genres = client.genres_moods()
+    AddItems('playlists', [build_item_playlist("/Genres", genre, "%s") for genre in genres] )
+
+@plugin.route('/Genres/<genre_id>$')
+def build_genre(genre_id):
+    log("[build_genre] " + str(genre_id))
+
+    playlist = client.genre_tracks(genre_id)
+
+    xbmcplugin.setProperty(addon_handle, 'FolderName', playlist.title)
+    AddItems('songs', [build_item_track(track, "%(title)s - %(artist)s")   for track in playlist.tracks],  cacheToDisc=False)
+
 
 #-------- Избранное ---------
 
@@ -455,13 +465,13 @@ def build_main():
         entry_list.append((url, li, True))
 
         # Show User Collection
-        li = MakeListItem("Моя коллекция", "special://home/addons/plugin.zvooq/assets/collectrion.png")
+        li = MakeListItem("Моя коллекция", "special://home/addons/plugin.zvooq/assets/collections.png")
         url = plugin.url_for(build_UserCollection)
         entry_list.append((url, li, True))
 
-        ###li = MakeListItem("Жанры и настроения", "special://home/addons/plugin.zvooq/assets/genres.png")
-        ###url = plugin.url_for(build_main_genres_moods)
-        ###entry_list.append((url, li, True))
+        li = MakeListItem("Жанры и настроения", "special://home/addons/plugin.zvooq/assets/genres.png")
+        url = plugin.url_for(build_main_genres_moods)
+        entry_list.append((url, li, True))
 
         li = MakeListItem("Плейлисты", "special://home/addons/plugin.zvooq/assets/playlists.png")
         url = plugin.url_for(build_main_playlists)

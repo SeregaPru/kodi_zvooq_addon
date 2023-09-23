@@ -20,6 +20,7 @@ class Service:
     def __init__(self):
         self.verify = True
         self.headers = []
+        self.token = ""
         pass
 
 #---------------
@@ -28,6 +29,7 @@ class Service:
     def printResp(self, r):
         log("")
         log("  / - - - r e q u e s t - -")
+        log(" | url  | " + str(r.url))
         log(" | code | " + str(r.status_code))
         log(" | resn | " + str(r.reason))
         log(" | text | " + r.text)
@@ -51,6 +53,7 @@ class Service:
         if len(token) != 32:
             raise Exception("Wrong token length")
         self.headers = {"x-auth-token": token}
+        self.token = token
 
 
     def sendGrapql(self, data):
@@ -74,13 +77,19 @@ class Service:
         return resp
 
 
-    def sendGet(self, url, params):
+    def sendGet(self, url, params, isJson = True):
+        reqHeaders = self.headers
+        reqHeaders["cookie"] = "auth=" + self.token +"; sauth=" + self.token + ";"
+        reqHeaders["User-Agent"] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
+
         r = requests.get(url, params=params,
-                         headers=self.headers, verify=self.verify)
+                         headers=reqHeaders, verify=self.verify)
         self.printResp(r)
 
-        resp = r.json(strict=False)
-        return resp
+        if isJson:
+            return r.json(strict=False)
+        else:
+            return r.text
 
 #---------------
 # Likes
@@ -217,37 +226,19 @@ class Service:
 
 #----
 
-    # жанры и настроения - список плейлистов
-    def getGenresMoodsPlaylists(self):
-        url = self.root + "/_next/data/release-17.0.0/genres.json"
-        resp = self.sendGet(url, [])
-        genres = resp['pageProps']['genresAndMoods']
-
-        playlists = []
-        for pl in genres:
-            if pl["mood"] == False:
-                pls = Playlist(
-                    id    = pl["id"],
-                    title = pl["title"],
-                    cover_uri = pl["image"]["src"],
-                )
-                playlists.append(pls)
-
-        for pl in genres:
-            if pl["mood"] == True:
-                pls = Playlist(
-                    id    = pl["id"],
-                    title = pl["title"],
-                    cover_uri = pl["image"]["src"],
-                )
-                playlists.append(pls)
-
-        return playlists
-
+    def getVersion(self):
+        # получить номер версии с основной страницы
+        url = self.root + "/"
+        resp = self.sendGet(url, [], False)
+        items = re.findall("sentry-release=([^,]+),", resp)
+        log("ver = " + items[0])
+        return items[0]
 
     # плейлисты на 1й странице
     def getMainPlaylists(self):
-        url = self.root + "/_next/data/release-17.0.0/playlists.json"
+        ver = self.getVersion()
+
+        url = self.root + "/_next/data/" + ver + "/playlists.json"
         resp = self.sendGet(url, [])
         resppls = resp['pageProps']['playlists']
 
@@ -261,6 +252,78 @@ class Service:
             playlists.append(pls)
 
         return playlists
+
+    # жанры и настроения - список ссылок на спец страницы
+    def getGenresMoods(self):
+        ver = self.getVersion()
+
+        url = self.root + "/_next/data/" + ver + "/genres.json"
+        resp = self.sendGet(url, [])
+        genres = resp['pageProps']['genresAndMoods']
+
+        playlists = []
+        for pl in genres:
+            if pl["mood"] == False:
+                pls = Playlist(
+                    id    = (re.findall("name=(.+)_grid", pl["action"]["url"]))[0],
+                    title = pl["title"],
+                    cover_uri = pl["image"]["src"],
+                )
+                playlists.append(pls)
+
+        for pl in genres:
+            if pl["mood"] == True:
+                pls = Playlist(
+                    id    = (re.findall("name=(.+)_grid", pl["action"]["url"]))[0],
+                    title = pl["title"],
+                    cover_uri = pl["image"]["src"],
+                )
+                playlists.append(pls)
+
+        return playlists
+
+    # жанр - треки
+    def getGenreTracks(self, genre):
+        genre_ident = genre
+
+        ver = self.getVersion()
+
+        url = self.root + "/_next/data/" + ver + "/genre/" + genre_ident + ".json?name=" + genre_ident
+        resp = self.sendGet(url, [])
+
+        trcs = []
+        for t in resp['pageProps']["grid"]["tracks"]:
+            tr = resp['pageProps']["grid"]["tracks"][t]
+
+            ar = []
+            ar.append(Artist(
+                id    = tr["artist_ids"][0],
+                title = tr["artist_names"][0],
+            ))            
+
+            al = [ Album(
+                id    = tr["release_id"],
+                title = tr["release_title"],
+                cover_uri = tr["image"]["src"],
+            ) ]
+
+            trk = Track(
+                id        = tr["id"],
+                title     = tr["title"],
+                albums    = al,
+                artists   = ar,
+                duration_ms = tr["duration"] * 1000,
+            )
+            trcs.append(trk)
+
+        pls = Playlist(
+            title     = resp['pageProps']["title"],
+            cover_uri = resp['pageProps']["image"]["src"],
+            tracks    = trcs
+        )
+
+        return pls
+
 
 #----
 
