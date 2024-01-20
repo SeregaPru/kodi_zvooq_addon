@@ -228,7 +228,7 @@ class Service:
 
     def getVersion(self):
         # получить номер версии с основной страницы
-        url = self.root + "/"
+        url = self.root + "/index"
         resp = self.sendGet(url, [], False)
         items = re.findall("sentry-release=([^,]+),", resp)
         log("ver = " + items[0])
