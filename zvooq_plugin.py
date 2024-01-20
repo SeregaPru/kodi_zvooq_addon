@@ -1,7 +1,6 @@
 # coding=utf-8
 import os
 import sys
-import threading
 import urllib
 from threading import Thread
 
@@ -147,35 +146,46 @@ def build_Search():
 #=========================
 # разное скачивание
 
-def download_all(tracks):
+# скачать все треки
+# byAlbums - раскладывать по альбомам (true) или класть все в одну папку (false)
+def download_all(tracks, DestFolder):
     li = xbmcgui.ListItem()
     xbmcplugin.setResolvedUrl(addon_handle, False, listitem=li)
 
-    t = Thread(target=downloadTracks, args=(client, tracks, settings))
+    t = Thread(target=downloadTracks, args=(client, tracks, DestFolder, settings))
     t.start()
 
-
+# скачать все треки альбома
+# GroupByArtist - (true) в папку с именем = исполнитель / альбом
+#   либо все в папку альбома а исполнители допишутся в имена файлов
 @plugin.route('/Download/Album/<album_id>')
 def download_album(album_id):
-    album = client.albums_with_tracks(album_id)
-    download_all(album.tracks)
+    real_album_id = album_id[2:]
+    album = client.albums_with_tracks(real_album_id)
+    DestFolder = album.title if (album_id[0] == "f") else None
+    download_all(album.tracks, DestFolder)
 
 
+# скачать все треки плейлиста
+# в одну папку с именем плейлиста, с именами файлов = имя_трека исполнитель
 @plugin.route('/Download/Playlist/<playlist_id>')
 def download_playlist(playlist_id):
     playlist = client.playlist_with_tracks(playlist_id)
-    download_all(playlist.tracks)
+    download_all(playlist.tracks, playlist.title)
 
 
 # скачать избранные треки
+# разложить по папкам с именем = исполнитель / альбом
 def download_user_selected_tracks():
-    download_all(client.users_likes_tracks())
+    download_all(client.users_likes_tracks(), None)
 
 
+# скачать все треки артиста
+# в папку с именем = исполнитель / альбом
 def download_artist(client, artist_id):
     artist = client.artists([artist_id])[0]
     artist_tracks = client.artists_tracks(artist_id, page=0, page_size=artist.counts.tracks)
-    download_all(artist_tracks.tracks)
+    download_all(artist_tracks.tracks, None)
 
 #===========
 
@@ -333,7 +343,8 @@ def build_item_album(path, album, titleFormat="%(title)s"):
 
     li.addContextMenuItems([
         ( 'Stream From Album',   "RunScript(%s, %s, %s, %s)" % (SERVICE_SCRIPT, 'custom', 'album', album.id)       ),
-        ( 'Download all tracks', 'Container.Update(%s)' % plugin.url_for(download_album, album.id) ),
+        ( 'Download tracks (in folder)',    'Container.Update(%s)' % plugin.url_for(download_album, "f-" + album.id) ),
+        ( 'Download tracks (artist/album)', 'Container.Update(%s)' % plugin.url_for(download_album, "a-" + album.id) ),
     ])
     if (album.artists):
         li.addContextMenuItems([
@@ -351,7 +362,7 @@ def build_item_playlist(path, playlist, titleFormat="%s"):
     url = plugin.url_for_path(path + "/" + str(playlist.id))     
 
     li.addContextMenuItems([(
-        'Download tracks', 'Container.Update(%s)' % plugin.url_for(download_playlist, playlist.id)
+        'Download tracks (playlist)', 'Container.Update(%s)' % plugin.url_for(download_playlist, playlist.id)
     )])
 
     return url, li, True

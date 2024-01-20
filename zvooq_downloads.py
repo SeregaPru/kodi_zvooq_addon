@@ -34,11 +34,17 @@ def checkAndMakeFolder(path):
         os.makedirs(fixPath(path))
     return path
 
+# замена плохих символов в путях
+def escapePath(path):
+    return "".join(["_" if c in _EXCLUDED else c for c in path])
 
 #  возвращает триаду - название, альбом, артист
 def _trackSimpleData(track):
-    artist = "".join([c for c in track.artists[0]["title"] if c not in _EXCLUDED]) if track.artists else ""
-    album  = "".join([c for c in track.albums [0]["title"] if c not in _EXCLUDED]) if track.albums  else ""
+    # если в треке указан артист то его возвращаем
+    artist = escapePath(track.artists[0]["title"]) if track.artists else ""
+    # если в треке указан альбом то возвращаем
+    album  = escapePath(track.albums [0]["title"]) if track.albums  else ""
+    # имя трека есть всегда - возвращаем
     title = track.title
     return title, album, artist
 
@@ -46,29 +52,38 @@ def _trackSimpleData(track):
 def getTrackFolders(settings, track):
     title, album, artist = _trackSimpleData(track)
 
-    folderArtist = os.path.join(settings.prefixPath, artist)
-    folderAlbum  = (folderArtist + "/" + album) if album else ""
+    folderArtist = os.path.join(settings.prefixPath, escapePath(artist))
+    folderAlbum  = (folderArtist + "/" + escapePath(album)) if album else ""
 
     return folderAlbum, folderArtist
 
 
-def get_filename(track, qualityIdx=0):
-    title, album, artist = _trackSimpleData(track)
-    title = "".join(["_" if c in _EXCLUDED else c for c in title])
-    exts = ["mp3", "mp3", "flac"]
-    return "%s.%s" % (title, exts[qualityIdx])
-
-
 # return (file exist, file full path, folder)
-def getTrackPath(settings, track):
+def getTrackPath(settings, track, DestFolder = None):
     title, album, artist = _trackSimpleData(track)
-    if album:
-        folder = "%s/%s" % (artist, album)
-    else:
-        folder = artist
-    folder = os.path.join(settings.prefixPath, folder)
 
-    f = get_filename(track, settings.qualityIdx)
+    # папка
+    if (DestFolder):
+        #  папка = заданному имени
+        # к имени трека дописываем артиста
+        folder = escapePath(DestFolder)
+        if (artist):
+            title += " - " + artist
+    else:
+        # если просили по альбомам то папка будет вида - артист / альбом
+        if album:
+            folder = "%s/%s" % (artist, album)
+        else:
+            folder = artist
+
+    # чистим имя файла
+    title = escapePath(title)
+
+    exts = ["mp3", "mp3", "flac"]
+    f = "%s.%s" % (title, exts[settings.qualityIdx])
+
+    # собираем все части пути
+    folder = os.path.join(settings.prefixPath, folder)
     path = os.path.join(folder, f)
     return existsPath(path), os.path.normpath(path), folder
 
@@ -84,11 +99,11 @@ def get_track_download_info(client, track, settings):
     else:
         return dInfo[settings.qualityIdx]
 
-
-def downloadTrack(client, track: Track, settings):
+# скачивание одного трека
+def downloadTrack(client, track: Track, DestFolder, settings):
     log("[downloadTrack] " + str(track.id));
 
-    downloaded, path, folder = getTrackPath(settings, track)
+    downloaded, path, folder = getTrackPath(settings, track, DestFolder)
     if not downloaded:
         checkAndMakeFolder(folder)
 
@@ -98,13 +113,20 @@ def downloadTrack(client, track: Track, settings):
         r = requests.get(url, allow_redirects=True, verify=True)
         open(path, 'wb').write(r.content)
 
-        if settings.qualityIdx < 2: # mp3
-            addFileMetadataMP3(track, path)
-        else: # codec = flac
-            addFileMetadataFLAC(track, path)
+        try:
+            if settings.qualityIdx < 2: # mp3
+                addFileMetadataMP3(track, path)
+            else: # codec = flac
+                addFileMetadataFLAC(track, path)
+        except Exception as err:
+            log("[downloadTrack] Error save track metadata");
 
         #-- download images
-        albumFolder, artistFolder = getTrackFolders(settings, track)
+        if (DestFolder):
+            albumFolder = os.path.join(settings.prefixPath, escapePath(DestFolder))
+            artistFolder = None
+        else:
+            albumFolder, artistFolder = getTrackFolders(settings, track)
 
         # download album cover
         #folder.jpg
@@ -117,21 +139,22 @@ def downloadTrack(client, track: Track, settings):
 
         # download artist image
         #artist-poster.jpg
-        artistImg = fixPath(artistFolder) + "/artist-poster.jpg"
-        artist = track.artists and track.artists[0]
-        if artist and artist.cover_uri and (not existsPath(artistImg)):
-            artist_img_url = artist.cover_uri.replace("{size}", settings.imgSize)
-            download_image(artist_img_url, artistImg)
+        if artistFolder:
+            artistImg = fixPath(artistFolder) + "/artist-poster.jpg"
+            artist = track.artists and track.artists[0]
+            if artist and artist.cover_uri and (not existsPath(artistImg)):
+                artist_img_url = artist.cover_uri.replace("{size}", settings.imgSize)
+                download_image(artist_img_url, artistImg)
 
     notify("Download", "Done: %s" % path, 1)
     return path
 
-
-def downloadTracks(client, tracks, settings):
+# скачивание коллекции треков
+def downloadTracks(client, tracks, DestFolder, settings):
     log("[downloadTrackS] " + str(tracks));
 
     notify("Download", "Download %s files" % len(tracks), 5)
-    [downloadTrack(client, track, settings) for track in tracks]
+    [downloadTrack(client, track, DestFolder, settings) for track in tracks]
     notify("Download", "All files downloaded.", 5)
 
 #---

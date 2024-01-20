@@ -244,14 +244,28 @@ class Service:
 
         playlists = []
         for pl in resppls:
-            pls = Playlist(
-                id    = pl["id"],
-                title = pl["title"],
-                cover_uri = pl["image"]["src"],
-            )
-            playlists.append(pls)
+            if (pl["title"]):
+                pls = Playlist(
+                    id    = pl["id"],
+                    title = pl["title"],
+                    cover_uri = pl["image"]["src"],
+                )
+                playlists.append(pls)
 
         return playlists
+
+
+    def parse_json_recursively(self, json_object, target_key, resArray):
+        if type(json_object) is dict and json_object:
+            for key in json_object:
+                if key == target_key:
+                    resArray.append(json_object[key]);
+                self.parse_json_recursively(json_object[key], target_key, resArray)
+
+        elif type(json_object) is list and json_object:
+            for item in json_object:
+                self.parse_json_recursively(item, target_key, resArray)
+                
 
     # жанры и настроения - список ссылок на спец страницы
     def getGenresMoods(self):
@@ -259,9 +273,13 @@ class Service:
 
         url = self.root + "/_next/data/" + ver + "/genres.json"
         resp = self.sendGet(url, [])
-        genres = resp['pageProps']['genresAndMoods']
+        #genres = resp['pageProps']['initialGridResponse']['result']['page']['sections'][1]['data']
+        data = []
+        self.parse_json_recursively(resp, "data", data)
+        genres = data[0] 
 
         playlists = []
+        # жанры
         for pl in genres:
             if pl["mood"] == False:
                 pls = Playlist(
@@ -271,6 +289,7 @@ class Service:
                 )
                 playlists.append(pls)
 
+        # настроения
         for pl in genres:
             if pl["mood"] == True:
                 pls = Playlist(
@@ -340,6 +359,7 @@ class Service:
                     id\n  title\n
                     duration\n
                     position\n
+                    artists {\n id\n title\n }\n
                 }\n    
                 image {\n src\n }\n  
                 artists {\n id\n title\n }\n
@@ -349,9 +369,9 @@ class Service:
 
         rel = resp['data']["getReleases"][0]
 
-        artiss = []
+        artists = []
         for ar in rel["artists"]:
-            artiss.append(Artist(
+            artists.append(Artist(
                 id    = ar["id"],
                 title = ar["title"],
             ))            
@@ -365,12 +385,14 @@ class Service:
         tracs = []
         for tr in rel["tracks"]:
             if tr == None: continue
+
             tracs.append(Track(
                 id    = tr["id"],
                 title = tr["title"],
                 duration_ms = tr["duration"] * 1000,
                 cover_uri = rel["image"]["src"],
-                artists = artiss,
+                #artists = artists,
+                artists = [Artist(id = tr["artists"][0]["id"], title = tr["artists"][0]["title"])] if tr["artists"][0]  else artists,
                 albums = [alb_int],
             ))            
 
@@ -379,7 +401,7 @@ class Service:
             title = rel["title"],
             date = rel["date"],
             cover_uri = rel["image"]["src"],
-            artists = artiss,            
+            artists = artists,            
             tracks = tracs
         )
 
