@@ -205,7 +205,7 @@ def play_track(track_id):
     sendPlayTrack(client, track)
 
     if (not downloaded) and settings.autoDownload:
-        t = Thread(target=downloadTrack, args=(client, track, settings))
+        t = Thread(target=downloadTrack, args=(client, track, None, settings))
         t.start()
 
 
